@@ -3,14 +3,19 @@
 import { cn } from "@/utils/cn";
 import { GridStack, GridStackNode, GridStackOptions } from "gridstack";
 import "gridstack/dist/gridstack.css";
-import React, { Children, HTMLAttributes, ReactElement, RefObject, createRef, memo, useLayoutEffect, useRef, useState } from "react"
+import React, { Children, HTMLAttributes, ReactElement, RefObject, createRef, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { GridItem } from "./GridItem";
+import { GRIDSTACK_REFS } from "@/globals/GRID";
+
+function hasKey(child: any): child is { key: string } {
+  return Object.prototype.hasOwnProperty.call(child, "key")
+}
 
 const GRID_CLASS = 'grid-stack'
 const GRID_ITEM_CLASS = 'grid-stack-item'
 const GRID_ITEM_CONTENT_CLASS = 'grid-stack-item-content'
 
 export type GridEventCallback = (e: Event, items: GridStackNode[]) => void;
-
 export type GridProps = Omit<HTMLAttributes<HTMLDivElement>,
   | "onAdd"
   | "onRemove"
@@ -25,7 +30,6 @@ export type GridProps = Omit<HTMLAttributes<HTMLDivElement>,
   | "onDragStart"
   | "onDragStop"
   | "onDrop"
-  | "children"
 > & {
   onAdd?: GridEventCallback;
   onRemove?: GridEventCallback;
@@ -41,7 +45,6 @@ export type GridProps = Omit<HTMLAttributes<HTMLDivElement>,
   onDragStop?: GridEventCallback;
   onDrop?: GridEventCallback;
   options?: GridStackOptions;
-  children?: Array<ReactElement<HTMLDivElement>>;
 }
 export const Grid = memo(({ 
   onAdd,
@@ -61,18 +64,29 @@ export const Grid = memo(({
   const refs = useRef<Record<string, RefObject<HTMLDivElement>>>({});
   const gridRef = useRef<GridStack>(null)
 
-  if (refs.current && children && Object.keys(refs.current).length !== children.length) {
-    children.forEach((child) => {
+  const getChildKey = useCallback((child: (
+      string | number | React.ReactElement<any, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | React.PromiseLikeOfReactNode
+    )) => {
+      if (hasKey(child) && child.key !== null) return child.key
+      throw new Error('Grid item must have a unique key')
+  }, [])
+  
+  const childrenArray = Children.toArray(children)
+
+  if (refs.current && childrenArray && Object.keys(refs.current).length !== childrenArray.length) {
+    childrenArray.forEach((child) => {
       const key = getChildKey(child)
       refs.current[key] = refs.current[key] ?? createRef()
     })
   }
-
+  
   useLayoutEffect(() => {
     // @ts-expect-error overwrite gridRef according to gridstack demo: https://github.com/gridstack/gridstack.js/blob/fba00d67bf30fbb69e3dc2f41e46d2f34203ea2d/demo/react-hooks.html
     gridRef.current = (gridRef.current ??
       GridStack.init(options))
     const grid = gridRef.current
+    // Update global grid reference
+    GRIDSTACK_REFS.grid = grid
 
     // add event listeners
     if (onAdd) grid.on('added', onAdd)
@@ -91,7 +105,7 @@ export const Grid = memo(({
 
     grid.batchUpdate()
     grid.removeAll(false)
-    children?.forEach((child) => {
+    childrenArray?.forEach((child) => {
       const key = getChildKey(child)
       const childElement = refs.current[key].current;
       if (!childElement) return;
@@ -102,40 +116,37 @@ export const Grid = memo(({
     return () => {
       grid.offAll();
     }
-  }, [children, onAdd, onChange, onDisable, onDrag, onDragStart, onDragStop, onDrop, onEnable, onRemove, onResize, onResizeContent, onResizeStart, onResizeStop, options])
+  }, [childrenArray, getChildKey, onAdd, onChange, onDisable, onDrag, onDragStart, onDragStop, onDrop, onEnable, onRemove, onResize, onResizeContent, onResizeStart, onResizeStop, options])
 
+
+  if (childrenArray === undefined) return null;
   if (refs.current === null) return null;
 
   return (
-    <div {...props} className={cn(GRID_CLASS, className)}>
-      {Children.map(children, (child) => {
-        if (child === undefined) return;
-        const key = getChildKey(child)
-        return (
-          <div ref={refs.current[key]} key={key} className={GRID_ITEM_CLASS}>
-            <child.type key={child.key} {...child.props} className={cn(GRID_ITEM_CONTENT_CLASS, child.props.className)} />
-          </div>
-        )
-      })}
-    </div>
+      <div {...props} className={cn(GRID_CLASS, className)}>
+        {Children.map(childrenArray, (child) => {
+          if (child === undefined) return;
+          const key = getChildKey(child)
+          return (
+            <div ref={refs.current[key]} key={key} className={GRID_ITEM_CLASS}>
+              <div className={cn(GRID_ITEM_CONTENT_CLASS, "[&>*]:w-full [&>*]:h-full")}>
+                {child}
+              </div>
+            </div>
+          )
+        })}
+      </div>
   )
 
-  function getChildKey(child: ReactElement<HTMLElement>) {
-    if (child.key === null) throw new Error('Grid item must have a unique key')
-    return child.key
-  }
 });
 Grid.displayName = 'Grid';
 
 const ControlledExample = () => {
-  const [items, setItems] = useState([{ id: 'item-1' }, { id: 'item-2' }, { id: 'item-3' }, { id: 'item-4' }])
+  const [items,setItems] = useState([{ id: 'item-1' }, { id: 'item-2' }, { id: 'item-3' }, { id: 'item-4' }])
+  
   return (
     <Grid className="bg-green-600" options={{ margin: 8, column: 12 }}>
-      {items.map((item) => (
-        <div key={item.id} className="flex rounded-md border-2 border-black items-center justify-center text-3xl text-black font-bold cursor-pointer bg-emerald-600">
-          {item.id}
-        </div>)
-      )}
+    {items.map(item =><GridItem key={item.id} id={item.id} />)}
     </Grid>
   )
 }
