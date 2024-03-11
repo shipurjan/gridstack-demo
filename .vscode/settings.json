@@ -1,6 +1,9 @@
 {
-    "cSpell.words": [
-        "gridstack",
-        "resizecontent"
-    ]
+  "cSpell.words": [
+    "dragstop",
+    "gridstack",
+    "resizecontent",
+    "resizestart",
+    "resizestop"
+  ]
 }

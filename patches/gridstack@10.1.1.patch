@@ -1,0 +1,13 @@
+diff --git a/dist/utils.js b/dist/utils.js
+index d14bc5bdb3826bd8ebd8ca5fcf3975002185862c..95c888f686a8ad44cee154cb8e5e940d5f516183 100644
+--- a/dist/utils.js
++++ b/dist/utils.js
+@@ -469,7 +469,7 @@ export class Utils {
+      */
+     static cloneDeep(obj) {
+         // list of fields we will skip during cloneDeep (nested objects, other internal)
+-        const skipFields = ['parentGrid', 'el', 'grid', 'subGrid', 'engine'];
++        const skipFields = ['parentGrid', 'el', 'grid', 'subGrid', 'engine', 'node'];
+         // return JSON.parse(JSON.stringify(obj)); // doesn't work with date format ?
+         const ret = Utils.clone(obj);
+         for (const key in ret) {

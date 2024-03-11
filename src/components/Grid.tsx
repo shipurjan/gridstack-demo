@@ -1,22 +1,47 @@
-'use client';
+"use client";
 
 import { cn } from "@/utils/cn";
-import { GridStack, GridStackNode, GridStackOptions } from "gridstack";
+import {
+  GridStack,
+  GridStackNode,
+  GridStackOptions,
+  GridStackWidget,
+} from "gridstack";
 import "gridstack/dist/gridstack.css";
-import React, { Children, HTMLAttributes, ReactElement, RefObject, createRef, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { GridItem } from "./GridItem";
-import { GRIDSTACK_REFS } from "@/globals/GRID";
+import { get } from "http";
+import React, {
+  HTMLAttributes,
+  ReactNode,
+  RefObject,
+  createRef,
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createRoot } from "react-dom/client";
 
-function hasKey(child: any): child is { key: string } {
-  return Object.prototype.hasOwnProperty.call(child, "key")
-}
+const GRID_CLASS = "grid-stack";
+const GRID_ITEM_CONTENT_CLASS = "grid-stack-item-content";
+const NESTED_GRID_CLASS = "grid-stack";
 
-const GRID_CLASS = 'grid-stack'
-const GRID_ITEM_CLASS = 'grid-stack-item'
-const GRID_ITEM_CONTENT_CLASS = 'grid-stack-item-content'
+export type GridItem = Omit<
+  GridStackWidget,
+  "content" | "id" | "subGridOpts"
+> & {
+  id: string;
+  node?: ReactNode;
+  subGridOpts?: Omit<GridStackOptions, "children"> & {
+    children?: GridItem[];
+  };
+};
 
 export type GridEventCallback = (e: Event, items: GridStackNode[]) => void;
-export type GridProps = Omit<HTMLAttributes<HTMLDivElement>,
+
+export type GridProps = Omit<
+  HTMLAttributes<HTMLDivElement>,
   | "onAdd"
   | "onRemove"
   | "onChange"
@@ -45,110 +70,243 @@ export type GridProps = Omit<HTMLAttributes<HTMLDivElement>,
   onDragStop?: GridEventCallback;
   onDrop?: GridEventCallback;
   options?: GridStackOptions;
-}
-export const Grid = memo(({ 
-  onAdd,
-  onRemove,
-  onChange,
-  onResize,
-  onResizeStart,
-  onResizeStop,
-  onResizeContent,
-  onDisable,
-  onEnable,
-  onDrag,
-  onDragStart,
-  onDragStop,
-  onDrop,
-  options, children, className, ...props }: GridProps) => {
-  const refs = useRef<Record<string, RefObject<HTMLDivElement>>>({});
-  const gridRef = useRef<GridStack>(null)
+  items?: GridItem[];
+};
+const Grid = forwardRef<GridStack, GridProps>(
+  (
+    {
+      onAdd,
+      onRemove,
+      onChange,
+      onResize,
+      onResizeStart,
+      onResizeStop,
+      onResizeContent,
+      onDisable,
+      onEnable,
+      onDrag,
+      onDragStart,
+      onDragStop,
+      onDrop,
+      options,
+      items,
+      className,
+      ...props
+    },
+    ref,
+  ) => {
+    const gridstackItems: GridStackWidget[] | undefined = items?.map(
+      /**  filter away custom props from {@link GridItem} */
+      ({ node, ...item }) => ({
+        ...item,
+      }),
+    );
 
-  const getChildKey = useCallback((child: (
-      string | number | React.ReactElement<any, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | React.ReactPortal | React.PromiseLikeOfReactNode
-    )) => {
-      if (hasKey(child) && child.key !== null) return child.key
-      throw new Error('Grid item must have a unique key')
-  }, [])
-  
-  const childrenArray = Children.toArray(children)
+    const itemRefs = useRef<Record<string, Element>>({});
+    const gridRef = useRef<GridStack>(null);
 
-  if (refs.current && childrenArray && Object.keys(refs.current).length !== childrenArray.length) {
-    childrenArray.forEach((child) => {
-      const key = getChildKey(child)
-      refs.current[key] = refs.current[key] ?? createRef()
-    })
-  }
-  
-  useLayoutEffect(() => {
-    // @ts-expect-error overwrite gridRef according to gridstack demo: https://github.com/gridstack/gridstack.js/blob/fba00d67bf30fbb69e3dc2f41e46d2f34203ea2d/demo/react-hooks.html
-    gridRef.current = (gridRef.current ??
-      GridStack.init(options))
-    const grid = gridRef.current
-    // Update global grid reference
-    GRIDSTACK_REFS.grid = grid
+    useEffect(() => {
+      console.log(itemRefs.current);
+    }, []);
 
-    // add event listeners
-    if (onAdd) grid.on('added', onAdd)
-    if (onRemove) grid.on('removed', onRemove)
-    if (onChange) grid.on('change', onChange)
-    if (onResize) grid.on('resize', onResize)
-    if (onResizeStart) grid.on('resizestart', onResizeStart)
-    if (onResizeStop) grid.on('resizestop', onResizeStop)
-    if (onResizeContent) grid.on('resizecontent', onResizeContent)
-    if (onDisable) grid.on('disable', onDisable)
-    if (onEnable) grid.on('enable', onEnable)
-    if (onDrag) grid.on('drag', onDrag)
-    if (onDragStart) grid.on('dragstart', onDragStart)
-    if (onDragStop) grid.on('dragstop', onDragStop)
-    if (onDrop) grid.on('dropped', onDrop)
+    useImperativeHandle(ref, () => gridRef.current!, []);
 
-    grid.batchUpdate()
-    grid.removeAll(false)
-    childrenArray?.forEach((child) => {
-      const key = getChildKey(child)
-      const childElement = refs.current[key].current;
-      if (!childElement) return;
-      grid.makeWidget(childElement)
-    })
-    grid.batchUpdate(false)
+    useLayoutEffect(() => {
+      // @ts-expect-error overwrite gridRef according to gridstack demo: https://github.com/gridstack/gridstack.js/blob/fba00d67bf30fbb69e3dc2f41e46d2f34203ea2d/demo/react-hooks.html
+      gridRef.current = gridRef.current ?? GridStack.init(options);
+      const grid = gridRef.current;
 
-    return () => {
-      grid.offAll();
+      // add event listeners
+      if (onAdd) grid.on("added", onAdd);
+      if (onRemove) grid.on("removed", onRemove);
+      if (onChange) grid.on("change", onChange);
+      if (onResize) grid.on("resize", onResize);
+      if (onResizeStart) grid.on("resizestart", onResizeStart);
+      if (onResizeStop) grid.on("resizestop", onResizeStop);
+      if (onResizeContent) grid.on("resizecontent", onResizeContent);
+      if (onDisable) grid.on("disable", onDisable);
+      if (onEnable) grid.on("enable", onEnable);
+      if (onDrag) grid.on("drag", onDrag);
+      if (onDragStart) grid.on("dragstart", onDragStart);
+      if (onDragStop) grid.on("dragstop", onDragStop);
+      if (onDrop) grid.on("dropped", onDrop);
+
+      // load updates the grid with the items by id or adds/removes them if not present
+      grid.load(gridstackItems ?? []);
+
+      if (items && Object.keys(itemRefs.current).length !== items.length) {
+        items.forEach((item) => {
+          // update ref
+          itemRefs.current[item.id] =
+            itemRefs.current[item.id] ??
+            getElementByGridStackId(grid.el, item.id);
+
+          const node = item.node;
+          const children = item.subGridOpts?.children;
+
+          if (
+            node !== undefined &&
+            children !== undefined &&
+            children.length > 0
+          ) {
+            throw new Error(
+              "Cannot have both a node and children - choose one",
+            );
+          }
+
+          const itemElement = itemRefs.current[item.id];
+          const itemContentElement = getItemContentElement(itemElement);
+
+          // CASE #1: no children - render node
+          if (item.node !== undefined) {
+            renderNode(itemContentElement, item.node);
+          }
+
+          // CASE #2: children - render nodes in subgrid
+          if (children !== undefined && children.length > 0) {
+            const nestedGridElement = getNestedGridElement(itemContentElement);
+
+            children.forEach((child) => {
+              const nestedItemElement = getElementByGridStackId(
+                nestedGridElement,
+                child.id,
+              );
+              const nestedItemContentElement =
+                getItemContentElement(nestedItemElement);
+
+              renderNode(nestedItemContentElement, child.node);
+            });
+          }
+        });
+      }
+
+      return () => {
+        grid.offAll();
+      };
+    }, [
+      gridstackItems,
+      items,
+      onAdd,
+      onChange,
+      onDisable,
+      onDrag,
+      onDragStart,
+      onDragStop,
+      onDrop,
+      onEnable,
+      onRemove,
+      onResize,
+      onResizeContent,
+      onResizeStart,
+      onResizeStop,
+      options,
+    ]);
+
+    return <div {...props} className={cn(GRID_CLASS, className)} />;
+
+    function renderNode(element: Element, node: ReactNode) {
+      createRoot(element).render(node);
     }
-  }, [childrenArray, getChildKey, onAdd, onChange, onDisable, onDrag, onDragStart, onDragStop, onDrop, onEnable, onRemove, onResize, onResizeContent, onResizeStart, onResizeStop, options])
 
+    function getElementByGridStackId(element: Element, id: string) {
+      const el = element.querySelector(`[gs-id="${id}"]`);
+      if (el === null) {
+        throw new Error(`Element with gs-id ${id} not found`);
+      }
+      return el;
+    }
 
-  if (childrenArray === undefined) return null;
-  if (refs.current === null) return null;
+    function getItemContentElement(itemElement: Element) {
+      const el = itemElement.querySelector(`.${GRID_ITEM_CONTENT_CLASS}`);
+      if (el === null) {
+        throw new Error(
+          `Element with class ${GRID_ITEM_CONTENT_CLASS} not found`,
+        );
+      }
+      return el;
+    }
 
-  return (
-      <div {...props} className={cn(GRID_CLASS, className)}>
-        {Children.map(childrenArray, (child) => {
-          if (child === undefined) return;
-          const key = getChildKey(child)
-          return (
-            <div ref={refs.current[key]} key={key} className={GRID_ITEM_CLASS}>
-              <div className={cn(GRID_ITEM_CONTENT_CLASS, "[&>*]:w-full [&>*]:h-full")}>
-                {child}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-  )
-
-});
-Grid.displayName = 'Grid';
+    function getNestedGridElement(itemContentElement: Element) {
+      const el = itemContentElement.querySelector(`.${NESTED_GRID_CLASS}`);
+      if (el === null) {
+        throw new Error(`Element with class ${NESTED_GRID_CLASS} not found`);
+      }
+      return el;
+    }
+  },
+);
+Grid.displayName = "Grid";
 
 const ControlledExample = () => {
-  const [items,setItems] = useState([{ id: 'item-1' }, { id: 'item-2' }, { id: 'item-3' }, { id: 'item-4' }])
-  
-  return (
-    <Grid className="bg-green-600" options={{ margin: 8, column: 12 }}>
-    {items.map(item =><GridItem key={item.id} id={item.id} />)}
-    </Grid>
-  )
-}
+  const [items, setItems] = useState<GridItem[]>([
+    {
+      id: "item-0",
+      x: 0,
+      y: 2,
+      w: 2,
+      h: 2,
+    },
+    {
+      id: "item-1",
+      x: 0,
+      y: 2,
+      w: 2,
+      h: 2,
+      node: (
+        <button
+          onClick={() => {
+            console.log("hello from cell");
+          }}
+        >
+          Click me
+        </button>
+      ),
+    },
+    {
+      id: "item-2",
+      x: 0,
+      y: 0,
+      w: 2,
+      h: 2,
+      subGridOpts: {
+        children: [
+          {
+            id: "item-3",
+            x: 0,
+            y: 0,
+            maxH: 12,
+            w: 12,
+            h: 12,
+            node: (
+              <button
+                onClick={() => {
+                  console.log("hello from nested cell");
+                }}
+              >
+                Click me
+              </button>
+            ),
+          },
+        ],
+      },
+    },
+  ]);
 
-export default ControlledExample
+  const grid = useRef<GridStack>(null);
+
+  return (
+    <>
+      <Grid
+        ref={grid}
+        className="bg-green-600"
+        items={items}
+        options={{
+          margin: 8,
+          column: 12,
+        }}
+      />
+    </>
+  );
+};
+
+export default ControlledExample;

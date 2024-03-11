@@ -1,4 +1,4 @@
-@import 'modern-normalize/modern-normalize.css';
+@import "modern-normalize/modern-normalize.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -21,6 +21,14 @@
   }
   body {
     @apply grow;
+  }
+  div.grid-stack {
+    & > div.grid-stack-item {
+      @apply !bg-green-800 border border-foreground;
+      & > div.grid-stack-item-content {
+        @apply !bg-green-700;
+      }
+    }
   }
   body {
     @apply bg-background text-foreground;

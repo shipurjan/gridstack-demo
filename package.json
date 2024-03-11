@@ -25,7 +25,13 @@
     "eslint": "^8",
     "eslint-config-next": "14.1.2",
     "postcss": "^8",
+    "prettier": "3.2.5",
     "tailwindcss": "^3.3.0",
     "typescript": "^5"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "gridstack@10.1.1": "patches/gridstack@10.1.1.patch"
+    }
   }
 }
